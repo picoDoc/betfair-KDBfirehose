@@ -1,0 +1,12 @@
+host,port,proctype,procname
+homer,1337,discovery,discovery1
+homer,9996,discovery,discovery2
+homer,13010,tickerplant,tickerplant1
+homer,13011,rdb,rdb1
+homer,13012,hdb,hdb3
+homer,13013,hdb,hdb2
+homer,13020,gateway,gateway1
+homer,20000,kill,killtick
+homer,20001,monitor,monitor1
+homer,20002,tickerlogreplay,tpreplay1
+homer,20003,housekeeping,housekeeping1
