@@ -5,7 +5,8 @@
 # It will take arguments calling on a function to make a specifc api call.
 # Such as get session token, get market data etc.
 
-# Init variables
+# Init variables, can't remember why I assigned the variable here,
+# something to do with scope I suppose...
 SESSION_TOKEN=666
 
 # Arguments
