@@ -27,7 +27,7 @@ param=${args[1]}
 
 #get session token and set to variable
 function getSessionToken(){
-  out=$(curl -s -q -k --cert auth/client-2048.crt --key auth/client-2048.key https://identitysso.betfair.com/api/certlogin -d "username=picoDoc&password=gMJ4qBBc" -H "X-Application: pulled torq")
+  out=$(curl -s -q -k --cert auth/client-2048.crt --key auth/client-2048.key https://identitysso.betfair.com/api/certlogin -d "username=$username&password=$password" -H "X-Application: pulled torq")
   echo ${out}
   export SESSION_TOKEN=${out}
 }
