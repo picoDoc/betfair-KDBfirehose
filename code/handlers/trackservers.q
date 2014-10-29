@@ -9,20 +9,24 @@ if[not @[value;`.proc.loaded;0b]; '"environment is not initialised correctly to 
 
 SERVERS:@[value;`.servers.SERVERS;([]procname:`symbol$();proctype:`symbol$();hpup:`symbol$();w:`int$();hits:`int$();startp:`timestamp$();lastp:`timestamp$();endp:`timestamp$();attributes:())]
 
-enabled:@[value;`enabled;1b]            				// whether server tracking is enabled
-CONNECTIONS:@[value;`CONNECTIONS;`]					// the list of connections to make at start up
-DISCOVERYREGISTER:@[value;`DISCOVERYREGISTER;1b]			// whether to register with the discovery service
-CONNECTIONSFROMDISCOVERY:@[value;`CONNECTIONSFROMDISCOVERY;1b]     	// whether to get connection details from the discovery service (as opposed to the static file)
-SUBSCRIBETODISCOVERY:@[value;`SUBSCRIBETODISCOVERY;1b]			// whether to subscribe to the discovery service for new processes becoming available
-DISCOVERYRETRY:@[value;`DISCOVERYRETRY;0D00:05]         		// how often to retry the connection to the discovery service.  If 0, no connection is made
-HOPENTIMEOUT:@[value;`HOPENTIMEOUT;2000]				// new connection time out value in milliseconds
-RETRY:@[value;`RETRY;0D00:05]						// period on which to retry dead connections. If 0 no connection is made
-RETAIN:@[value;`RETAIN;`long$0D00:30]					// length of time to retain server records
-AUTOCLEAN:@[value;`AUTOCLEAN;1b]					// clean out old records when handling a close
-DEBUG:@[value;`DEBUG;1b]						// whether to print debug output
-LOADPASSWORD:@[value;`LOADPASSWORD;1b]                 			// load the external username:password from ${KDBCONFIG}/passwords
-USERPASS:`								// the username and password used to make connections
-STARTUP:@[value;`STARTUP;0b]						// whether to automatically make connections on startup
+enabled:@[value;`enabled;1b]            							// whether server tracking is enabled
+CONNECTIONS:@[value;`CONNECTIONS;`]								// the list of connections to make at start up
+DISCOVERYREGISTER:@[value;`DISCOVERYREGISTER;1b]						// whether to register with the discovery service
+CONNECTIONSFROMDISCOVERY:@[value;`CONNECTIONSFROMDISCOVERY;1b]     				// whether to get connection details from the discovery service (as opposed to the static file)
+SUBSCRIBETODISCOVERY:@[value;`SUBSCRIBETODISCOVERY;1b]						// whether to subscribe to the discovery service for new processes becoming available
+DISCOVERYRETRY:@[value;`DISCOVERYRETRY;0D00:05]         					// how often to retry the connection to the discovery service.  If 0, no connection is made
+TRACKNONTORQPROCESS:@[value;`TRACKNONTORQPROCESS;0b]						// whether to track and register non torQ processes 
+NONTORQPROCESSFILE:@[value;`NONTORQPROCESSFILE;hsym`$getenv[`KDBCONFIG],"/nontorqprocess.csv"]	// non torQ processes file
+HOPENTIMEOUT:@[value;`HOPENTIMEOUT;2000]							// new connection time out value in milliseconds
+RETRY:@[value;`RETRY;0D00:05]									// period on which to retry dead connections. If 0 no connection is made
+RETAIN:@[value;`RETAIN;`long$0D00:30]								// length of time to retain server records
+AUTOCLEAN:@[value;`AUTOCLEAN;1b]								// clean out old records when handling a close
+DEBUG:@[value;`DEBUG;1b]									// whether to print debug output
+LOADPASSWORD:@[value;`LOADPASSWORD;1b]                 						// load the external username:password from ${KDBCONFIG}/passwords
+USERPASS:`											// the username and password used to make connections
+STARTUP:@[value;`STARTUP;0b]									// whether to automatically make connections on startup
+DISCOVERY:@[value;`DISCOVERY;enlist`]								// list of discovery services to connect to (if not using process.csv)
+STARTUPCALLED:0b										// flag indicating if .servers.startup[] has been called already 
 
 // If required, change this method to something more secure!
 // Otherwise just load the usernames and passwords from the passwords directory
@@ -114,7 +118,10 @@ cleanup:{if[count w0:exec w from`.servers.SERVERS where not .dotz.livehn w;
 addnthawc:{[name;proctype;hpup;attributes;W;checkhandle]
     if[checkhandle and not isalive:.dotz.liveh W;'"invalid handle"];
     cleanup[];
-    `.servers.SERVERS insert(name;proctype;hpup;W;0i;$[isalive;.z.p;0Np];.z.p;0Np;attributes);W}
+    $[not hpup in (exec hpup from .servers.SERVERS) inter (exec hpup from .servers.nontorqprocesstab);
+	    `.servers.SERVERS insert(name;proctype;hpup;W;0i;$[isalive;.z.p;0Np];.z.p;0Np;attributes);.lg.o[`conn;"Removed double entries: name->", string[name],", proctype->",string[proctype],", hpup->\"",string[hpup],"\""]];
+    W
+    }
 
 addh:{[hpuP]
     W:opencon hpuP;
@@ -127,16 +134,16 @@ getdetails:{(.z.f;.z.h;system"p";@[value;`.proc.procname;`];@[value;`.proc.proct
 
 / add session behind a handle
 addhw:{[hpuP;W]
-    // Get the information around a process
-    / info:`f`h`port`procname`proctype`attributes!(@[W;"(.z.f;.z.h;system\"p\";@[value;`.proc.procname;`];@[value;`.proc.proctype;`];@[value;(`.proc.getattributes;`);()!()])";(`;`;0Ni;`;`;()!())]);
-    info:`f`h`port`procname`proctype`attributes!(@[W;(`.servers.getdetails;`);(`;`;0Ni;`;`;()!())]);
-    if[0Ni~info`port;'"remote call failed on handle ",string W];
-    if[null name:info`procname;name:`$last("/"vs string info`f)except enlist""];
-    if[0=count name;name:`default];
-    if[null hpuP;hpuP:hsym`$(string info`h),":",string info`port];
-    // If this handle already has an entry, delete the old entry
-    delete from `.servers.SERVERS where w=W;
-    addnthawc[name;info`proctype;hpuP;info`attributes;W;0b]}
+	// Get the information around a process
+	/ info:`f`h`port`procname`proctype`attributes!(@[W;"(.z.f;.z.h;system\"p\";@[value;`.proc.procname;`];@[value;`.proc.proctype;`];@[value;(`.proc.getattributes;`);()!()])";(`;`;0Ni;`;`;()!())]);
+	info:`f`h`port`procname`proctype`attributes!(@[W;(`.servers.getdetails;`);(`;`;0Ni;`;`;()!())]);
+	if[0Ni~info`port;'"remote call failed on handle ",string W];
+	if[null name:info`procname;name:`$last("/"vs string info`f)except enlist""];
+	if[0=count name;name:`default];
+	if[null hpuP;hpuP:hsym`$(string info`h),":",string info`port];
+	// If this handle already has an entry, delete the old entry
+	delete from `.servers.SERVERS where w=W;
+	addnthawc[name;info`proctype;hpuP;info`attributes;W;0b]}
 
 addw:addhw[`]
 
@@ -147,7 +154,7 @@ checkw:{{x!@[;"1b";0b]each x}exec w from`.servers.SERVERS where .dotz.liveh w,w 
 / after getting new servers run retry to open connections
 retry:{retryrows exec i from `.servers.SERVERS where not .dotz.liveh0 w,not proctype=`discovery}
 retrydiscovery:{
-	if[count d:exec i from `.servers.SERVERS where not .dotz.liveh0 w,proctype=`discovery;
+	if[count d:exec i from `.servers.SERVERS where proctype=`discovery,not ({any .dotz.liveh0 x};w) fby hpup, i=(first;i) fby hpup;
 		.lg.o[`conn;"attempting to connect to discovery services"];
 		retryrows d;
 		// register with the newly opened discovery services
@@ -164,7 +171,13 @@ autodiscovery:{if[DISCOVERYRETRY>0; .servers.retrydiscovery[]]}
 // Attempt to make a connection for specified row ids
 retryrows:{[rows]
 	update lastp:.z.p,w:.servers.opencon each hpup from`.servers.SERVERS where i in rows;
-        update attributes:{$[null x;()!();@[x;(`.proc.getattributes;`);()!()]]} each w,startp:?[null w;0Np;.z.p] from `.servers.SERVERS where i in rows;}
+        update attributes:{$[null x;()!();@[x;(`.proc.getattributes;`);()!()]]} each w,startp:?[null w;0Np;.z.p] from `.servers.SERVERS where i in rows;
+        if[ count connectedrows:select from `.servers.SERVERS where i in rows, .dotz.liveh0 w; 
+	connectcustom[connectedrows]]}
+
+connectcustom:{[connectedrows]}  // user definable function to be executed when a service is reconnected. Also performed on first connection of that service.
+				 // Input is the line(s) from .servers.SERVERS corresponding to the newly (re)connected service
+
 // close handles and remove rows from the table
 removerows:{[rows]
 	@[hclose;;()] each .servers.SERVERS[rows][`w] except 0 0Ni;
@@ -226,14 +239,26 @@ refreshattributes:{
 // called at start up
 // either load in 	
 startup:{
-	// read in the table of processes
-	procs:update hpup:`$(((":",'string host),'":"),'string port) from .proc.readprocs .proc.file;
+	if[.servers.STARTUPCALLED;.lg.o[`conn;"Attempt to call startup routine more than once"];:()]; // terminate fn if startup has already run successfully, log to output
+	// read in the table of processes, both TorQ processes and external processes
+  	procs:update hpup:`$(((":",'string host),'":"),'string port) from .proc.readprocs .proc.file;
+  	nontorqprocesstab::$[count key NONTORQPROCESSFILE;
+				update hpup:`$(((":",'string host),'":"),'string port) from .proc.readprocs NONTORQPROCESSFILE;
+				0#procs];
+	// If DISCOVERY servers have been explicity defined
+       if[count .servers.DISCOVERY;
+                if[not null first .servers.DISCOVERY;
+                        if[count select from procs where hpup in .servers.DISCOVERY; .lg.e[`startup; "host:port in .servers.DISCOVERY list is already present in data read from ",string .proc.file]];
+                        procs,:([]host:`;port:0Ni;proctype:`discovery;procname:`;hpup:.servers.DISCOVERY)]];
 	if[CONNECTIONSFROMDISCOVERY or DISCOVERYREGISTER; 
 		register[procs;`discovery;0b];
 		retrydiscovery[]];
 	if[not CONNECTIONSFROMDISCOVERY; register[procs;;0b] each $[CONNECTIONS~`ALL;exec distinct proctype from procs;CONNECTIONS]];
+	if[TRACKNONTORQPROCESS;register[nontorqprocesstab;;0b] each  $[CONNECTIONS~`ALL;exec distinct proctype from nontorqprocesstab;CONNECTIONS]];
 	// try and open dead connections
-	retry[]}
+	retry[];
+	.servers.STARTUPCALLED:1b}
+
 			
 pc:{[result;W] update w:0Ni,endp:.z.p from`.servers.SERVERS where w=W;cleanup[];result}
 

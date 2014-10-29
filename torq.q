@@ -75,19 +75,28 @@ getusage:{@[value;`.proc.usage;generalusage,"\n\n",envusage,"\n\n",stdoptionusag
 envvars:@[value;`envvars;`symbol$()]
 envvars:distinct `KDBCODE`KDBCONFIG`KDBLOG,envvars
 
+// set the torq environment variables if not already set
+qhome:{q:getenv[`QHOME]; if[q~""; q:$[.z.o like "w*"; "c:/q"; getenv[`HOME],"/q"]]; q}
+settorqenv:{[envvar; default] 
+ if[""~getenv[envvar]; 
+  .lg.o[`init;(string envvar)," is not defined. Defining it to ",val:qhome[],"/",default];	
+  setenv[envvar; val]];}
+
 // The variables required to be set in each process
 // This is the mimimum set of information that each process must know about itself for registration / advertisement purposes
 req:@[value;`req;`symbol$()]
 req:distinct `proctype`procname,req
 
 version:"1.0"
-getversion:{version^@[{first read0 x};hsym`$getenv[`KDBCONFIG],"/version.txt";version]}
+application:""
+getversion:{$[0 = count v:@[{first read0 x};hsym`$getenv[`KDBCONFIG],"/version.txt";version];version;v]}
+getapplication:{$[0 = count a:@[{read0 x};hsym`$getenv[`KDBCONFIG],"/application.txt";application];application;a]}
 
 \d .lg
 
 // Set the logging table at the top level
 // This is to allow it to be published
-@[`.;`logmsg;:;([]time:`timestamp$(); sym:`symbol$(); host:`symbol$(); loglevel:`symbol$(); id:`symbol$(); message:())] 
+@[`.;`logmsg;:;([]time:`timestamp$(); sym:`symbol$(); host:`symbol$(); loglevel:`symbol$(); id:`symbol$(); message:())]; 
 
 // Logging functions live in here
 
@@ -121,7 +130,8 @@ err:{[loglevel;proc;id;message;dict]
         l[loglevel;proc;id;message;dict];
         if[.proc.stop;'message];
  	if[.proc.initialised;:()];
-        if[not .proc.trap; exit 3]}
+        if[not .proc.trap; exit 3];
+	}
 
 // log out and log err
 // The process name is temporary which we will reset later - once we know what type of process this is
@@ -148,6 +158,8 @@ banner:{
  -1 format"w :     www.aquaq.co.uk";
  -1 format"e : support@aquaq.co.uk";
  -1 blank; 
+ -1 format"Running on ","kdb+ ",(string .z.K)," ",string .z.k;
+ if[count customtext:.proc.getapplication[];-1 format each customtext;-1 blank]; // prints custom text from file
  -1 full;}
 
 banner[]
@@ -198,6 +210,9 @@ stop:`stop in key params
 
 if[trap and stop; .log.o[`init;"trap mode and stop mode are both set to true.  Stop mode will take precedence"]];
 
+// Set up the environment if not set
+settorqenv'[`KDBCODE`KDBCONFIG`KDBLOG;("code";"config";"logs")];
+
 // Check the environment is set up correctly
 .err.env[envvars]
 
@@ -234,7 +249,7 @@ readprocs:{[file] @[("SISS";enlist",")0:;file;{.lg.e[`procfile;"failed to read p
 // Pull out the applicable rows
 readprocfile:{[file]
 	res:@[{t:readprocs file;
-          select from t where port=system"p",(host=.z.h) or host=`$"." sv string "i"$0x0 vs .z.a};file;{.err.ex[`init;"failed to read process file ",(string x)," : ",y;2]}[file]];
+          select from t where abs[port]=abs system"p",(host=.z.h) or host=`$"." sv string "i"$0x0 vs .z.a};file;{.err.ex[`init;"failed to read process file ",(string x)," : ",y;2]}[file]];
 	if[0=count res;
 		.err.ex[`init;"failed to read any rows from ",(string file)," which relate to this process; Host=",(string .z.h),", IP=",("." sv string "i"$0x0 vs .z.a),", port=",string system"p";2]];
 	first res}	

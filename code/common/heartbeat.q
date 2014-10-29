@@ -67,11 +67,18 @@ err:{
  if[debug;
   {.lg.e[`heartbeat;"processtype ",(string x`sym),", processname ",(string x`procname)," has not heartbeated since ",(string x`time)," and has status ERROR"]} each 0!x];
  update error:1b from `.hb.hb where ([]sym;procname) in key x;
+ // key x is .hb.hb table with an extra status column
+ // It is empty most of the time but will contain a row if the process has not heartbeat
  processerror[x]}
 
 // override these functions to implement bespoke functionality on heartbeat errors and warnings
-processwarning:{[processtab]}
-processerror:{[processtab]}
+processwarning:{[processtab] 
+  if[1<=count processtab;
+     .html.pub[`heartbeat;0!select from .hb.hb where procname in exec procname from processtab]]} 
+
+processerror:{[processtab] 
+  if[1<=count processtab;
+     .html.pub[`heartbeat;0!select from .hb.hb where procname in exec procname from processtab]]} 
 
 \d .
 

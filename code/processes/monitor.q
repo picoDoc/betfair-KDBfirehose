@@ -1,14 +1,16 @@
 // set up the upd function to handle heartbeats
 upd:{[t;x]
  $[t=`heartbeat;
- 	[.hb.storeheartbeat[x]; 
-	 // publish to web pages 
- 	 .html.pub[`heartbeat;hbdata[]]];
-  t=`logmsg;
-	[insert[`logmsg;x]; 
-	 // publish to web pages
- 	 .html.pub[`logmsg;lmdata[]]];
-  ()]}
+	 [ // publish single heartbeat row to web pages 
+	  .html.pub[`heartbeat;$[min (`warning`error in cols exec from x);x;[.hb.storeheartbeat[x];hb_x::x;select from .hb.hb where procname in x`procname]]]];
+   t=`logmsg;
+	  [ 
+     insert[`logmsg;x]; 
+	   // publish single logmsg row to web page
+	   .html.pub[`logmsg;x];
+     // publish all lmchart data - DEV - could publish single cols and update svg internally
+     .html.pub[`lmchart;lmchart[]]];
+   ()]}
 
 subscribedhandles:0 0Ni
 
@@ -33,7 +35,6 @@ subscribe each (exec w from .servers.SERVERS) except subscribedhandles;
  subscribe each (exec w from .servers.SERVERS) except subscribedhandles;
  }
 
-
 // GUI
 
 // initialise pubsub
@@ -50,7 +51,7 @@ bucketlmchartdata:{[x] x:`minute$$[x=0;1;x];0!select errcount:count i by (0D00:0
 /- Data functions - These are functions that are requested by the front end
 /- start is sent on each connection and refresh. Where there are more than one table it is wise to identify each one using a dictionary as shown
 start:{.html.wssub each `heartbeat`logmsg`lmchart;
-        .html.dataformat["start";(`hbtable`lmtable`lmchart)!(hbdata[];lmdata[];lmchart[])] }
+       .html.dataformat["start";(`hbtable`lmtable`lmchart)!(hbdata[];lmdata[];lmchart[])] }
 bucketlmchart:{.html.dataformat["bucketlmchart";enlist bucketlmchartdata[x]]}
 
 monitorui:.html.readpagereplaceHP["index.html"]

@@ -2,10 +2,11 @@
 //Andrew Steele. andrew.steele@aquaq.co.uk
 //AQUAQ Analytics Info@aquaq.co.uk +4402890511232
 
-inputcsv:@[value;`.fa.inputcsv;getenv[`KDBCONFIG],"/filealerter.csv"]
-polltime:@[value;`.fa.polltime;0D00:00:10]
-alreadyprocessed:@[value;`.fa.alreadyprocessed;getenv[`KDBCONFIG],"/filealerterprocessed"]
-skipallonstart:@[value;`.fa.skipallonstart;0b]
+inputcsv:@[value;`.fa.inputcsv;getenv[`KDBCONFIG],"/filealerter.csv"]				// The name of the input csv to drive what gets done
+polltime:@[value;`.fa.polltime;0D00:00:10]							// The period to poll the file system
+alreadyprocessed:@[value;`.fa.alreadyprocessed;getenv[`KDBCONFIG],"/filealerterprocessed"]	// The location of the table on disk to store the information about files which have already been processed
+skipallonstart:@[value;`.fa.skipallonstart;0b]							// Whether to skip all actions when the file alerter process starts up (so only "new" files after the processes starts will be processed) 
+moveonfail:@[value;`.fa.moveonfail;0b]								// If the processing of a file fails (by any action) then whether to move it or not regardless
 os:$[like[string .z.o;"w*"];`win;`lin]
 
 
@@ -55,9 +56,9 @@ skipall:{matches:raze find'[filealertercsv.path;filealertercsv.match];
 action:{[function;file]	
 	$[`nothere~@[value;function;`nothere];
 		{.lg.e[`alerter;"function ", (string x)," has not been defined"]}'[function];
-		.[{.lg.o[`alerter;"running function ",(string x)," on ",y];((value x)[getpath[y];getfile[y]])};
+		.[{.lg.o[`alerter;"running function ",(string x)," on ",y];((value x)[getpath[y];getfile[y]]);:1b};
 			(function;file);
-			{.lg.e[`alerter;"failed to execute ", (string x)," on ",y,": ", z]; ()}[function;file]]]}
+			{.lg.e[`alerter;"failed to execute ", (string x)," on ",y,": ", z]; ();:0b}[function;file]]]}
 					
 
 //-adds the processed file, along with md5 hash and file size to the already processed table and saves it down to memory
@@ -93,9 +94,9 @@ processfiles:{[DICT]
 	$[0<count files;
 	[{.lg.o[`alerter;"found file ", x]}'[files];
 	/-perform the function on the file
-	action/:[DICT[`function];files];];
+	pf:action/:[DICT[`function];files];];
 	.lg.o[`alerter;"no new files found"]];
-	t:update moveto:(count toprocess)#enlist .rmvr.removeenvvar[DICT[`movetodirectory]] from toprocess; t}
+	t:update function:(count toprocess)#DICT[`function],funcpassed:pf,moveto:(count toprocess)#enlist .rmvr.removeenvvar[DICT[`movetodirectory]] from toprocess; t}
 	
 
 //-function to move files in a table, first col is files second col is destination	
@@ -123,8 +124,12 @@ FArun:{.lg.o[`alerter;"running filealerter process"];
 		$[0=count filealertercsv;
 		.lg.o[`alerter;"csv file is empty"];
 		[lastproc:raze processfiles each filealertercsv;
-			complete each lastproc;
-			moveall[lastproc]]];
+                      newproc:select filename,md5hash,filesize,moveto from lastproc;
+                      $[moveonfail;
+				successful:newproc;
+				successful:select filename,md5hash,filesize,moveto from lastproc where (all;funcpassed=1b) fby filename];
+			complete each newproc;
+			moveall[successful]]];
 	}
 
 loadcsv[];

@@ -22,6 +22,7 @@ register:{
 	(neg ((where ((first new`proctype) in/: subs) or subs~\:enlist`ALL) inter key .z.W) except .z.w)@\:(`.servers.procupdate;new);
 	} 
 
+
 // get a list of services
 getservices:{[proctypes;subscribe] 
 	.servers.cleanup[];
@@ -29,11 +30,11 @@ getservices:{[proctypes;subscribe]
 	distinct select procname,proctype,hpup,attributes from .servers.SERVERS where proctype in ?[(proctypes~`ALL) or proctypes~enlist`ALL;proctype;proctypes],not proctype=`discovery}
 
 // add each handle
-@[.servers.addw;;{.lg.e[`discovery;x]}] each exec w from .servers.SERVERS where .dotz.liveh w;
+@[.servers.addw;;{.lg.e[`discovery;x]}] each exec w from .servers.SERVERS where .dotz.liveh w, not hpup in (exec hpup from .servers.nontorqprocesstab);
 
 // try to make each server connect back in 
 / (neg exec w from .servers.SERVERS where .dotz.liveh w)@\:"@[value;(`.servers.autodiscovery;`);()]";
-(neg exec w from .servers.SERVERS where .dotz.liveh w)@\:(`.servers.autodiscovery;`);
+(neg exec w from .servers.SERVERS where .dotz.liveh w,not hpup in exec hpup from .servers.nontorqprocesstab)@\:(`.servers.autodiscovery;`);
 
 // modify .z.pc - drop items out of the subscription dictionary
 .z.pc:{subs::(enlist y) _ subs; x@y}@[value;`.z.pc;{;}]
